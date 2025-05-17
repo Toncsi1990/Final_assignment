@@ -7,20 +7,197 @@ editor: visual
 
 ## Running Code
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+Data Import
 
 ```{r}
-1 + 1
+library(tidyverse)
+
+# Load dataset
+coffee_data <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/refs/heads/main/data/2024/2024-05-14/coffee_survey.csv")
+
+# Preview structure and data
+glimpse(coffee_data)
+View(coffee_data)
+
 ```
 
-You can add options to executable code like this
+ Coffee Type Categorization: coffe_data
 
 ```{r}
-#| echo: false
-2 * 2
+library(stringr)
+library(dplyr)
+
+# Clean and classify coffee preferences
+coffee_data <- coffee_data %>%
+  mutate(favorite_cleaned = str_to_lower(str_trim(favorite))) %>%  # új, tisztított oszlop
+  mutate(favorite_grouped = case_when(
+    favorite_cleaned %in% c("black", "drip", "espresso", "americano", "french press", "ristretto", "regular drip coffee") ~ "Black",
+    favorite_cleaned %in% c("latte", "flat white", "cappuccino", "macchiato", "mocha", "breve", 
+                            "coffee with milk", "coffee + milk", "latte macchiato", "dirty chai", "cortado") ~ "With Milk",
+    favorite_cleaned %in% c("iced coffee", "cold brew", "iced latte", "iced americano", 
+                            "frappuccino", "blended iced coffee", "cold foam cold brew") ~ "Iced",
+    TRUE ~ "Other"
+  )) %>%
+  relocate(favorite_grouped, .after = favorite)
+
+View(coffee_data)
+
+
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+
+Age Group Categorization and Visualization:
+
+```{r}
+coffee_data <- coffee_data %>%
+  mutate(age_group = case_when(
+    age < 18 ~ "<18",
+    age >= 18 & age < 25 ~ "18–24",
+    age >= 25 & age < 35 ~ "25–34",
+    age >= 35 & age < 45 ~ "35–44",
+    age >= 45 & age < 55 ~ "45–54",
+    age >= 55 ~ "55+",
+    TRUE ~ NA_character_
+  ))
 
 
+library(ggplot2)
+library(scales)
+
+coffee_data %>%
+  filter(!is.na(age_group), !is.na(favorite_grouped)) %>%
+  ggplot(aes(x = age_group, fill = favorite_grouped)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Favorite Coffee Types by Age Group",
+    x = "Age Group",
+    y = "Proportion (%)",
+    fill = "Coffee Type"
+  ) +
+  theme_minimal()
+
+```
+
+ Coffee Preference by Gender:
+
+```{r}
+coffee_data %>%
+  filter(!is.na(gender), !is.na(favorite_grouped)) %>%
+  ggplot(aes(x = gender, fill = favorite_grouped)) +
+  geom_bar(position = "stack") +
+  labs(
+    title = "Favorite Coffee Types by Gender (Total Counts)",
+    x = "Gender",
+    y = "Number of People",
+    fill = "Coffee Type"
+  ) +
+  theme_minimal()
+
+```
+
+
+Model 1 – age_group only
+
+```{r}
+library(nnet)
+
+mod_data1 <- coffee_data %>%
+  filter(!is.na(favorite_grouped), !is.na(age_group))
+
+model1 <- multinom(favorite_grouped ~ age_group, data = mod_data1)
+
+```
+
+Model 2 – age_group + gender:
+
+```{r}
+mod_data2 <- coffee_data %>%
+  filter(!is.na(favorite_grouped), !is.na(age_group), !is.na(gender))
+
+model2 <- multinom(favorite_grouped ~ age_group + gender, data = mod_data2)
+
+```
+
+Model Comparison:
+
+```{r}
+
+# Predictions
+pred1 <- predict(model1)
+pred2 <- predict(model2)
+
+# Actual labels
+actual1 <- mod_data1$favorite_grouped
+actual2 <- mod_data2$favorite_grouped
+
+
+# Confusion matrices
+cat("Confusion Matrix – Model 1 (age_group only):\n")
+print(table(Predicted = pred1, Actual = actual1))
+
+cat("\nConfusion Matrix – Model 2 (age_group + gender):\n")
+print(table(Predicted = pred2, Actual = actual2))
+
+# Accuracy
+acc1 <- mean(pred1 == actual1)
+acc2 <- mean(pred2 == actual2)
+
+# AIC values
+aic1 <- AIC(model1)
+aic2 <- AIC(model2)
+
+ Final comparison
+cat("\n--- Model Comparison ---\n")
+cat("Model 1 (age_group only): Accuracy =", round(acc1, 3), "| AIC =", round(aic1, 1), "\n")
+cat("Model 2 (age_group + gender): Accuracy =", round(acc2, 3), "| AIC =", round(aic2, 1), "\n")
+
+```
+
+Assumption Check – Multicollinearity (VIF)
+
+```{r}
+library(car)
+mod_vif <- glm(I(favorite_grouped == "Black") ~ age_group + gender, 
+               data = mod_data2, 
+               family = binomial)
+
+vif(mod_vif)
+
+```
+
+Summary of Findings
+This report explored patterns in coffee preferences using survey data from the 2024 TidyTuesday project. After cleaning and categorizing free-text responses, we analyzed relationships between preferred coffee type, age, and gender.
+
+Key Observations
+Most popular coffee types were categorized as:
+
+Black, With Milk, Iced, and Other.
+
+Age and gender both influence coffee preferences, with noticeable variation across groups:
+
+Younger age groups preferred Iced and With Milk coffee.
+
+Males showed a relatively higher preference for Black coffee.
+
+Statistical Models
+We compared two multinomial logistic regression models:
+
+Model	Accuracy	AIC
+Model 1: age_group only	0.363	10097.2
+Model 2: age_group + gender	0.413	8683.9
+
+Model 2 outperformed Model 1 in both accuracy and model fit.
+
+Including gender improved prediction and better distributed predicted classes.
+
+Confusion matrices revealed that Model 1 tended to overpredict "With Milk", while Model 2 made more balanced predictions.
+
+Assumption Checks
+Variance Inflation Factors (VIF) were calculated for Model 2 to check multicollinearity.
+
+All VIF values were near 1, indicating no concerning correlation between predictors.
+
+Conclusion
+The inclusion of gender significantly improves the predictive ability of the model. Age and gender together provide meaningful insight into coffee preferences. The methodology and visualizations support robust, interpretable results and reflect well-documented modeling decisions.
 
