@@ -119,40 +119,6 @@ model2 <- multinom(favorite_grouped ~ age_group + gender, data = mod_data2)
 
 ```
 
-Model Comparison:
-
-```{r}
-
-# Predictions
-pred1 <- predict(model1)
-pred2 <- predict(model2)
-
-# Actual labels
-actual1 <- mod_data1$favorite_grouped
-actual2 <- mod_data2$favorite_grouped
-
-
-# Confusion matrices
-cat("Confusion Matrix – Model 1 (age_group only):\n")
-print(table(Predicted = pred1, Actual = actual1))
-
-cat("\nConfusion Matrix – Model 2 (age_group + gender):\n")
-print(table(Predicted = pred2, Actual = actual2))
-
-# Accuracy
-acc1 <- mean(pred1 == actual1)
-acc2 <- mean(pred2 == actual2)
-
-# AIC values
-aic1 <- AIC(model1)
-aic2 <- AIC(model2)
-
- Final comparison
-cat("\n--- Model Comparison ---\n")
-cat("Model 1 (age_group only): Accuracy =", round(acc1, 3), "| AIC =", round(aic1, 1), "\n")
-cat("Model 2 (age_group + gender): Accuracy =", round(acc2, 3), "| AIC =", round(aic2, 1), "\n")
-
-```
 
 Assumption Check – Multicollinearity (VIF)
 
